@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Google Tasks → CSV</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f5f5f5;
+      --surface: #ffffff;
+      --border: #e0e0e0;
+      --border-focus: #1a73e8;
+      --text: #202124;
+      --text-secondary: #5f6368;
+      --accent: #1a73e8;
+      --accent-hover: #1557b0;
+      --success: #137333;
+      --success-bg: #e6f4ea;
+      --error: #c5221f;
+      --error-bg: #fce8e6;
+      --drop-active: #e8f0fe;
+      --radius: 8px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px 80px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      margin-top: 8px;
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      max-width: 480px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      width: 100%;
+      max-width: 600px;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      position: relative;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.dragover {
+      border-color: var(--border-focus);
+      background: var(--drop-active);
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .drop-zone .icon {
+      font-size: 2.5rem;
+      margin-bottom: 12px;
+      display: block;
+      pointer-events: none;
+    }
+
+    .drop-zone .label {
+      font-size: 1rem;
+      font-weight: 500;
+      pointer-events: none;
+    }
+
+    .drop-zone .sublabel {
+      margin-top: 6px;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      pointer-events: none;
+    }
+
+    /* Status bar */
+    .status {
+      margin-top: 20px;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    .status.success {
+      background: var(--success-bg);
+      color: var(--success);
+      display: block;
+    }
+
+    .status.error {
+      background: var(--error-bg);
+      color: var(--error);
+      display: block;
+    }
+
+    /* Preview table */
+    .preview-wrapper {
+      margin-top: 24px;
+      display: none;
+    }
+
+    .preview-wrapper.visible {
+      display: block;
+    }
+
+    .preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .preview-header span {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+
+    .table-scroll {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 0.8rem;
+    }
+
+    thead th {
+      background: #f8f9fa;
+      padding: 8px 12px;
+      text-align: left;
+      font-weight: 600;
+      white-space: nowrap;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+    }
+
+    tbody td {
+      padding: 7px 12px;
+      border-bottom: 1px solid #f0f0f0;
+      white-space: nowrap;
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* Download button */
+    .actions {
+      margin-top: 20px;
+      display: none;
+    }
+
+    .actions.visible {
+      display: flex;
+      gap: 10px;
+    }
+
+    button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 20px;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg);
+    }
+
+    footer {
+      margin-top: 40px;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Google Tasks → CSV</h1>
+    <p>Upload your Google Takeout Tasks JSON file and download it as a spreadsheet-ready CSV.</p>
+  </header>
+
+  <div class="card">
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept=".json,application/json" />
+      <span class="icon">📋</span>
+      <div class="label">Drop your Tasks JSON here</div>
+      <div class="sublabel">or click to browse &nbsp;·&nbsp; <code>Tasks.json</code> from Google Takeout</div>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <div class="preview-wrapper" id="previewWrapper">
+      <div class="preview-header">
+        <strong id="previewTitle">Preview</strong>
+        <span id="previewCount"></span>
+      </div>
+      <div class="table-scroll">
+        <table id="previewTable">
+          <thead id="previewHead"></thead>
+          <tbody id="previewBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="actions" id="actions">
+      <button class="btn-primary" id="downloadBtn">
+        ⬇ Download CSV
+      </button>
+      <button class="btn-secondary" id="resetBtn">
+        Clear
+      </button>
+    </div>
+  </div>
+
+  <footer>
+    All processing happens in your browser &mdash; no data is uploaded anywhere.
+  </footer>
+
+  <script>
+    const dropZone   = document.getElementById('dropZone');
+    const fileInput  = document.getElementById('fileInput');
+    const status     = document.getElementById('status');
+    const previewWrapper = document.getElementById('previewWrapper');
+    const previewHead    = document.getElementById('previewHead');
+    const previewBody    = document.getElementById('previewBody');
+    const previewCount   = document.getElementById('previewCount');
+    const actions    = document.getElementById('actions');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const resetBtn   = document.getElementById('resetBtn');
+
+    let csvContent = null;
+    let csvFilename = 'tasks.csv';
+
+    // Drag-and-drop visual feedback
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file) processFile(file);
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) processFile(fileInput.files[0]);
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      if (!csvContent) return;
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = csvFilename;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    resetBtn.addEventListener('click', reset);
+
+    function reset() {
+      csvContent = null;
+      fileInput.value = '';
+      hideStatus();
+      previewWrapper.classList.remove('visible');
+      actions.classList.remove('visible');
+      previewHead.innerHTML = '';
+      previewBody.innerHTML = '';
+    }
+
+    function showStatus(message, type) {
+      status.textContent = message;
+      status.className = 'status ' + type;
+    }
+
+    function hideStatus() {
+      status.className = 'status';
+    }
+
+    function processFile(file) {
+      reset();
+      csvFilename = file.name.replace(/\.json$/i, '') + '.csv';
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const root = JSON.parse(e.target.result);
+          const records = extractRecords(root);
+
+          if (records.length === 0) {
+            showStatus('No tasks found. Make sure this is a Google Takeout Tasks JSON file.', 'error');
+            return;
+          }
+
+          const { headers, rows } = buildTable(records);
+          csvContent = buildCsv(headers, rows);
+
+          renderPreview(headers, rows);
+          previewCount.textContent = `${records.length} task${records.length !== 1 ? 's' : ''}`;
+          previewWrapper.classList.add('visible');
+          actions.classList.add('visible');
+          showStatus(`Found ${records.length} task${records.length !== 1 ? 's' : ''} — ready to download.`, 'success');
+
+        } catch (err) {
+          showStatus('Could not parse the file. Make sure it is a valid JSON file from Google Takeout.', 'error');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function extractRecords(root) {
+      const outerItems = root?.items;
+      if (!Array.isArray(outerItems) || outerItems.length === 0) return [];
+      const innerItems = outerItems[0]?.items;
+      if (!Array.isArray(innerItems)) return [];
+      return innerItems.filter(item => item !== null && typeof item === 'object' && !Array.isArray(item));
+    }
+
+    function buildTable(records) {
+      // Collect all unique keys, then sort: common important ones first, rest alphabetically
+      const keySet = new Set();
+      records.forEach(r => Object.keys(r).forEach(k => keySet.add(k)));
+
+      const priority = ['title', 'status', 'notes', 'due', 'updated', 'id', 'kind', 'selfLink'];
+      const headers = [
+        ...priority.filter(k => keySet.has(k)),
+        ...[...keySet].filter(k => !priority.includes(k)).sort(),
+      ];
+
+      const rows = records.map(record =>
+        headers.map(h => {
+          const v = record[h];
+          if (v === undefined || v === null) return '';
+          if (typeof v === 'string') return v;
+          if (typeof v === 'boolean' || typeof v === 'number') return String(v);
+          return JSON.stringify(v);
+        })
+      );
+
+      return { headers, rows };
+    }
+
+    function buildCsv(headers, rows) {
+      const escape = val => {
+        const s = String(val);
+        return (s.includes(',') || s.includes('"') || s.includes('\n'))
+          ? '"' + s.replace(/"/g, '""') + '"'
+          : s;
+      };
+      const lines = [
+        headers.map(escape).join(','),
+        ...rows.map(row => row.map(escape).join(',')),
+      ];
+      return lines.join('\r\n');
+    }
+
+    function renderPreview(headers, rows) {
+      // Header row
+      const tr = document.createElement('tr');
+      headers.forEach(h => {
+        const th = document.createElement('th');
+        th.textContent = h;
+        tr.appendChild(th);
+      });
+      previewHead.appendChild(tr);
+
+      // Up to 10 preview rows
+      const previewRows = rows.slice(0, 10);
+      previewRows.forEach(row => {
+        const tr = document.createElement('tr');
+        row.forEach(cell => {
+          const td = document.createElement('td');
+          td.textContent = cell;
+          td.title = cell; // full text on hover
+          tr.appendChild(td);
+        });
+        previewBody.appendChild(tr);
+      });
+
+      if (rows.length > 10) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = headers.length;
+        td.style.textAlign = 'center';
+        td.style.color = 'var(--text-secondary)';
+        td.style.fontStyle = 'italic';
+        td.textContent = `… and ${rows.length - 10} more rows`;
+        tr.appendChild(td);
+        previewBody.appendChild(tr);
+      }
+    }
+  </script>
+</body>
+</html>
